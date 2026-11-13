@@ -1,12 +1,12 @@
 # Pixel Perfect Replica
 
-https://github.com/Abdul2005-09/pixel-perfect-replica.git
+Implement exactly the screenshot and nothing else
 
 This project was built with [Lovable](https://lovable.dev).
 
 ## Build with Lovable
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/4d21b9b3-5c4a-4d11-bf21-54290ca77961).
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/f5e42856-f59d-40c8-92f0-2318e88442c2).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
 - **Stay in sync**: every change made in Lovable is committed straight to this repository.
