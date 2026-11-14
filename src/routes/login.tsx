@@ -21,7 +21,7 @@ function Login() {
   const { redirect } = Route.useSearch();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"in" | "up">("in");
+  const [mode, setMode] = useState<"in" | "up" | "forgot">("in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,7 +33,10 @@ function Login() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    if (mode === "in") {
+    if (mode === "forgot") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+      if (error) toast.error(error.message); else toast.success("Check your email for a link to reset your password.");
+    } else if (mode === "in") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) toast.error(error.message);
     } else {
@@ -53,7 +56,7 @@ function Login() {
   return (
     <section className="mx-auto max-w-md px-5 py-20">
       <p className="eyebrow text-center text-burgundy">My account</p>
-      <h1 className="font-display mt-3 text-center text-5xl">{mode === "in" ? "Welcome back" : "Create account"}</h1>
+      <h1 className="font-display mt-3 text-center text-5xl">{mode === "in" ? "Welcome back" : mode === "up" ? "Create account" : "Reset password"}</h1>
       <div className="mt-10 grid grid-cols-2 border">
         {(["in", "up"] as const).map((m) => (
           <button key={m} onClick={() => setMode(m)} className={`eyebrow h-11 ${mode === m ? "bg-foreground text-background" : ""}`}>{m === "in" ? "Sign in" : "Register"}</button>
@@ -62,8 +65,10 @@ function Login() {
       <form onSubmit={submit} className="mt-8 space-y-5">
         {mode === "up" && <div><Label htmlFor="name">Full name</Label><Input id="name" required value={name} onChange={(e) => setName(e.target.value)} className="mt-2" /></div>}
         <div><Label htmlFor="email">Email</Label><Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2" /></div>
-        <div><Label htmlFor="pw">Password</Label><Input id="pw" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2" /></div>
-        <Button type="submit" size="lg" className="w-full" disabled={busy}>{busy ? "Please wait…" : mode === "in" ? "Sign in" : "Create account"}</Button>
+        {mode !== "forgot" && <div><Label htmlFor="pw">Password</Label><Input id="pw" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2" /></div>}
+        <Button type="submit" size="lg" className="w-full" disabled={busy}>{busy ? "Please wait…" : mode === "in" ? "Sign in" : mode === "up" ? "Create account" : "Send reset link"}</Button>
+        {mode === "in" && <button type="button" onClick={() => setMode("forgot")} className="block w-full text-center text-xs text-muted-foreground underline-offset-4 hover:underline">Forgot password?</button>}
+        {mode === "forgot" && <button type="button" onClick={() => setMode("in")} className="block w-full text-center text-xs text-muted-foreground underline-offset-4 hover:underline">Back to sign in</button>}
       </form>
       <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" /></div>
       <button onClick={google} className="flex h-11 w-full items-center justify-center gap-[10px] border border-[#747775] bg-[#FFFFFF] px-3 text-sm font-medium text-[#1F1F1F]">

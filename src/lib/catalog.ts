@@ -81,7 +81,7 @@ export const productsQuery = () =>
       const { data, error } = await supabase
         .from("products")
         .select(SELECT)
-        .eq("status", "active")
+        .in("status", ["active", "sold_out"])
         .order("sort_order");
       if (error) throw error;
       return withSignedImages((data ?? []).map(normalize));
@@ -166,6 +166,7 @@ export function totalStock(p: Product) {
 }
 export type Availability = "in_stock" | "low_stock" | "sold_out";
 export function availability(p: Product): Availability {
+  if (p.status === "sold_out") return "sold_out";
   const t = totalStock(p);
   if (t <= 0) return "sold_out";
   if (t <= 5) return "low_stock";

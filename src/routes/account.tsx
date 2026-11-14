@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { requireSession, useAuth } from "@/lib/auth";
 import { formatINR } from "@/lib/catalog";
+import { AddressBook, ProfileForm } from "@/components/site/AccountDetails";
 
 export const Route = createFileRoute("/account")({
   ssr: false,
@@ -52,6 +53,10 @@ function Account() {
           <Button variant="ghost" onClick={signOut}>Sign out</Button>
         </div>
       </div>
+      <h2 className="font-display mt-14 text-3xl">Your details</h2>
+      {user && <ProfileForm userId={user.id} />}
+      <h2 className="font-display mt-14 text-3xl">Saved addresses</h2>
+      {user && <AddressBook userId={user.id} />}
       <h2 className="font-display mt-14 text-3xl">Your orders</h2>
       {orders.length === 0 ? (
         <div className="mt-6 border p-10 text-center"><p className="text-sm text-muted-foreground">No orders yet.</p><Button asChild className="mt-5"><Link to="/shop">Start shopping</Link></Button></div>

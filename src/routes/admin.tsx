@@ -1,9 +1,12 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ProductEditor } from "@/components/admin/ProductEditor";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { requireSession } from "@/lib/auth";
-import { SIZES, adminProductsQuery, formatINR } from "@/lib/catalog";
+import { SIZES, adminProductsQuery, formatINR, primaryImage, totalStock } from "@/lib/catalog";
 
 const STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"] as const;
 
@@ -26,6 +29,17 @@ function Admin() {
     queryFn: async () => (await supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false })).data ?? [],
   });
 
+  const [editing, setEditing] = useState<string | "new" | null>(null);
+  const editingProduct = editing && editing !== "new" ? products.find((p) => p.id === editing) ?? null : null;
+  const live = orders.filter((o) => o.status !== "cancelled");
+  const kpis = [
+    ["Total revenue", formatINR(live.reduce((s, o) => s + o.total, 0))],
+    ["Total orders", String(orders.length)],
+    ["Pending fulfilment", String(orders.filter((o) => ["pending", "confirmed", "processing"].includes(o.status)).length)],
+    ["Out of stock", String(products.filter((p) => p.status !== "draft" && p.inventory.some((i) => i.quantity <= 0)).length)],
+  ];
+  const outOfStock = products.filter((p) => p.status !== "draft" && p.inventory.some((i) => i.quantity <= 0));
+
   async function setStock(productId: string, size: string, value: string) {
     const quantity = Math.max(0, parseInt(value || "0", 10) || 0);
     const { error } = await supabase.from("inventory").upsert({ product_id: productId, size, quantity }, { onConflict: "product_id,size" });
@@ -45,7 +59,30 @@ function Admin() {
     <div className="mx-auto max-w-6xl px-5 py-10">
       <div className="flex items-center justify-between"><h1 className="font-display text-4xl">Store admin</h1><Link to="/" className="eyebrow hover:text-burgundy">View store →</Link></div>
 
-      <h2 className="font-display mt-10 text-3xl">Orders</h2>
+      <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {kpis.map(([label, value]) => (
+          <div key={label} className="border p-5"><p className="eyebrow text-muted-foreground">{label}</p><p className="font-display mt-2 text-3xl">{value}</p></div>
+        ))}
+      </div>
+      {outOfStock.length > 0 && (
+        <div className="mt-4 border border-burgundy/40 p-4 text-sm"><p className="eyebrow text-burgundy">Out of stock alerts</p>
+          <ul className="mt-2 space-y-1 text-xs">{outOfStock.map((p) => <li key={p.id}>{p.name}: sizes {p.inventory.filter((i) => i.quantity <= 0).map((i) => i.size).join(", ")}{totalStock(p) <= 0 ? " (all sizes)" : ""}</li>)}</ul></div>
+      )}
+
+      <div className="mt-14 flex items-center justify-between"><h2 className="font-display text-3xl">Products</h2><Button onClick={() => setEditing("new")}>Add product</Button></div>
+      <div className="mt-4 divide-y border">
+        {products.map((p) => (
+          <div key={p.id} className="flex items-center gap-4 p-3 text-sm">
+            <div className="h-14 w-11 shrink-0 overflow-hidden bg-secondary">{primaryImage(p) && <img src={primaryImage(p)} alt="" className="size-full object-cover" />}</div>
+            <div className="flex-1"><p className="font-medium">{p.name}</p><p className="text-xs text-muted-foreground">{formatINR(p.price)} · {p.variants.length} colour(s) · {p.images.length} photo(s)</p></div>
+            <span className="eyebrow border px-2 py-1">{p.status.replace("_", " ")}</span>
+            <Button variant="outline" size="sm" onClick={() => setEditing(p.id)}>Edit</Button>
+          </div>
+        ))}
+      </div>
+      <ProductEditor product={editingProduct} open={editing !== null} onOpenChange={(o) => { if (!o) setEditing(null); }} />
+
+      <h2 className="font-display mt-14 text-3xl">Orders</h2>
       {orders.length === 0 ? <p className="mt-4 text-sm text-muted-foreground">No orders yet.</p> : (
         <div className="mt-4 divide-y border">
           {orders.map((o) => (

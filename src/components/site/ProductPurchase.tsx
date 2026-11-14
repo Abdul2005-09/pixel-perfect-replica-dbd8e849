@@ -21,7 +21,7 @@ export function ProductPurchase({ product, onDone }: { product: Product; onDone?
   }, [product.id, product.variants]);
 
   const available = size ? stockFor(product, size) : 0;
-  const allSoldOut = SIZES.every((s) => stockFor(product, s) <= 0);
+  const allSoldOut = product.status === "sold_out" || SIZES.every((s) => stockFor(product, s) <= 0);
 
   function commit(goCheckout: boolean) {
     if (!size) {
