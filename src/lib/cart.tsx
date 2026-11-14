@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { signImageUrls } from "@/lib/catalog";
@@ -22,7 +23,7 @@ type BagCtx = {
   add: (item: Omit<BagItem, "key">) => void;
   setQuantity: (key: string, q: number) => void;
   remove: (key: string) => void;
-  clear: () => void;
+  clear: () => Promise<void>;
   open: boolean;
   setOpen: (o: boolean) => void;
   wishlist: string[];
@@ -45,6 +46,22 @@ export function mergeBags(saved: BagItem[], guest: BagItem[]): BagItem[] {
     else out.push({ ...g, quantity: Math.min(MAX_QTY, g.quantity) });
   }
   return out;
+}
+
+/**
+ * Database queries are lazy: they only run once awaited or `.then`-ed, so a bare
+ * `void supabase.from(...)` never reaches the database. Always send writes through here.
+ */
+export async function persist(label: string, query: PromiseLike<{ error: { message: string } | null }>): Promise<boolean> {
+  try {
+    const { error } = await query;
+    if (!error) return true;
+    console.error(`[bag] ${label} failed: ${error.message}`);
+  } catch (e) {
+    console.error(`[bag] ${label} failed:`, e);
+  }
+  toast.error("We couldn't save that change to your account. Please try again.");
+  return false;
 }
 
 function readLocal<T>(k: string): T[] {
@@ -120,14 +137,14 @@ export function BagProvider({ children }: { children: ReactNode }) {
 
   const saveRow = useCallback((i: BagItem) => {
     if (!userId) return;
-    void supabase.from("cart_items").upsert(
+    void persist("save bag item", supabase.from("cart_items").upsert(
       { user_id: userId, product_id: i.productId, colour: i.colour ?? "", size: i.size, quantity: i.quantity },
       { onConflict: "user_id,product_id,colour,size" },
-    );
+    ));
   }, [userId]);
   const deleteRow = useCallback((i: BagItem) => {
     if (!userId) return;
-    void supabase.from("cart_items").delete().eq("user_id", userId).eq("product_id", i.productId).eq("colour", i.colour ?? "").eq("size", i.size);
+    void persist("remove bag item", supabase.from("cart_items").delete().eq("user_id", userId).eq("product_id", i.productId).eq("colour", i.colour ?? "").eq("size", i.size));
   }, [userId]);
 
   const add = useCallback((item: Omit<BagItem, "key">) => {
@@ -147,19 +164,20 @@ export function BagProvider({ children }: { children: ReactNode }) {
     setItems((prev) => prev.filter((i) => i.key !== key));
     if (row) deleteRow(row);
   }, [deleteRow]);
-  const clear = useCallback(() => {
+  const clear = useCallback(async () => {
     setItems([]);
-    if (userId) void supabase.from("cart_items").delete().eq("user_id", userId);
+    if (userId) await persist("empty bag", supabase.from("cart_items").delete().eq("user_id", userId));
   }, [userId]);
+  const wishRef = useRef(wishlist);
+  wishRef.current = wishlist;
   const toggleWish = useCallback((productId: string) => {
-    setWishlist((w) => {
-      const has = w.includes(productId);
-      if (userId) {
-        if (has) void supabase.from("wishlists").delete().eq("user_id", userId).eq("product_id", productId);
-        else void supabase.from("wishlists").insert({ user_id: userId, product_id: productId });
-      }
-      return has ? w.filter((s) => s !== productId) : [...w, productId];
-    });
+    const has = wishRef.current.includes(productId);
+    const next = has ? wishRef.current.filter((s) => s !== productId) : [...wishRef.current, productId];
+    wishRef.current = next;
+    setWishlist(next);
+    if (!userId) return;
+    if (has) void persist("remove from wishlist", supabase.from("wishlists").delete().eq("user_id", userId).eq("product_id", productId));
+    else void persist("add to wishlist", supabase.from("wishlists").upsert({ user_id: userId, product_id: productId }, { onConflict: "user_id,product_id", ignoreDuplicates: true }));
   }, [userId]);
 
   const value = useMemo(
